@@ -21,5 +21,17 @@ def init_db():
                         created_at DATE DEFAULT CURRENT_DATE
                         )
                     """)
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS url_checks
+                    (
+                        id SERIAL PRIMARY KEY,
+                        url_id INTEGER REFERENCES urls(id),
+                        status_code INTEGER,
+                        h1 TEXT,
+                        title TEXT,
+                        description TEXT,
+                        created_at DATE DEFAULT CURRENT_DATE
+                        )
+                    """)
     conn.commit()
     conn.close()
