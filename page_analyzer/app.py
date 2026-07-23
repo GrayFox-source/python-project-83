@@ -5,6 +5,8 @@ import validators
 from flask import Flask, render_template, request, redirect, url_for, flash
 from dotenv import load_dotenv
 from . import db
+import requests
+from requests.exceptions import RequestException, Timeout, ConnectionError
 
 load_dotenv()
 
@@ -68,9 +70,14 @@ def create_app():
         conn = db.get_db_connection()
         with conn.cursor() as cur:
             cur.execute("""
-                        SELECT u.id, u.name, u.created_at, MAX(uc.created_at) as last_check
+                        SELECT u.id, u.name, u.created_at, 
+                               MAX(uc.created_at) as last_check,
+                               (SELECT uc2.status_code
+                                FROM url_checks uc2
+                                WHERE uc2.url_id = u.id
+                                ORDER BY uc2.id DESC LIMIT 1) as last_status
                         FROM urls u
-                                 LEFT JOIN url_checks uc ON u.id = uc.url_id
+                            LEFT JOIN url_checks uc ON u.id = uc.url_id
                         GROUP BY u.id, u.name, u.created_at
                         ORDER BY u.id DESC
                         """)
@@ -148,20 +155,38 @@ def create_app():
         conn = db.get_db_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT id FROM urls WHERE id = %s", (url_id,))
-                url_exists = cur.fetchone()
+                cur.execute("SELECT id, name FROM urls WHERE id = %s", (url_id,))
+                url_record = cur.fetchone()
 
-                if not url_exists:
+                if not url_record:
                     flash('URL не найден', 'danger')
                     return redirect(url_for('urls_list'), code=303)
 
-                cur.execute("""
-                            INSERT INTO url_checks (url_id, created_at)
-                            VALUES (%s, %s) RETURNING id
-                            """, (url_id, date.today()))
-            conn.commit()
-            flash('Страница успешно проверена', 'success')
-            return redirect(url_for('urls_show', url_id=url_id), code=303)
+                url_to_check = url_record[1]
+
+                try:
+                    response = requests.get(url_to_check, timeout=10)
+                    response.raise_for_status()
+                    status_code = response.status_code
+
+                    cur.execute("""
+                                INSERT INTO url_checks (url_id, status_code, created_at)
+                                VALUES (%s, %s, %s) RETURNING id
+                                """, (url_id, status_code, date.today()))
+
+                    conn.commit()
+                    flash('Страница успешно проверена', 'success')
+                    return redirect(url_for('urls_show', url_id=url_id), code=303)
+
+                except (Timeout, ConnectionError):
+                    flash('Произошла ошибка при проверке', 'danger')
+                    return redirect(url_for('urls_show', url_id=url_id), code=303)
+                except RequestException:
+                    flash('Произошла ошибка при проверке', 'danger')
+                    return redirect(url_for('urls_show', url_id=url_id), code=303)
+                except Exception:
+                    flash('Произошла ошибка при проверке', 'danger')
+                    return redirect(url_for('urls_show', url_id=url_id), code=303)
         finally:
             conn.close()
 
