@@ -5,9 +5,9 @@ from urllib.parse import urlparse
 import requests
 import validators
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, url_for
 from requests.exceptions import ConnectionError, RequestException, Timeout
-from dotenv import load_dotenv
 
 from . import db
 
