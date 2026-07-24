@@ -14,7 +14,6 @@
 [![Flask](https://img.shields.io/badge/Flask-3.0-green.svg)](https://flask.palletsprojects.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)](https://www.postgresql.org/)
 [![Deploy](https://img.shields.io/badge/Deploy-Render.com-brightgreen.svg)](https://render.com/)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=GrayFox-source_python-project-83&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=YOUR_GITHUB_USERNAME_python-project-83)
 
 Веб-приложение для SEO-анализа веб-страниц. Проверяет доступность сайтов и извлекает основные метаданные: заголовки, описания и коды ответов.
 
