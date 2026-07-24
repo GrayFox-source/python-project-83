@@ -19,7 +19,7 @@ def create_app():
     app = Flask(__name__, template_folder=template_dir)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
-    db.init_db()
+    # db.init_db()
 
     @app.route('/', methods=['GET', 'POST'])
     def index():
