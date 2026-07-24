@@ -23,3 +23,6 @@ dev = [
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["DTZ011", "BLE001"]
