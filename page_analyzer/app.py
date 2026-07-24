@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import requests
@@ -12,6 +12,7 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 from . import db
 
 load_dotenv()
+
 
 
 def create_app():
