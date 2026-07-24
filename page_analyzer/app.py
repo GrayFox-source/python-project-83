@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from . import db
 import requests
 from requests.exceptions import RequestException, Timeout, ConnectionError
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -152,6 +153,7 @@ def create_app():
 
     @app.route('/urls/<int:url_id>/checks', methods=['POST'])
     def create_check(url_id):
+
         conn = db.get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -167,12 +169,21 @@ def create_app():
                 try:
                     response = requests.get(url_to_check, timeout=10)
                     response.raise_for_status()
-                    status_code = response.status_code
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    title_tag = soup.find('title')
+                    title = title_tag.get_text().strip() if title_tag else ''
+
+                    h1_tag = soup.find('h1')
+                    h1 = h1_tag.get_text().strip() if h1_tag else ''
+
+                    meta_desc = soup.find('meta', attrs={'name': 'description'})
+                    description = meta_desc.get('content', '').strip() if meta_desc else ''
 
                     cur.execute("""
-                                INSERT INTO url_checks (url_id, status_code, created_at)
-                                VALUES (%s, %s, %s) RETURNING id
-                                """, (url_id, status_code, date.today()))
+                                INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+                                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                                """, (url_id, response.status_code, h1, title, description, date.today()))
 
                     conn.commit()
                     flash('Страница успешно проверена', 'success')
