@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from urllib.parse import urlparse
 
 import requests
@@ -44,10 +44,9 @@ def create_app():
                     flash('Страница уже существует', 'info')
                     return redirect(url_for('urls_show', url_id=existing[0]), code=303)
 
-                # Используем datetime.now(timezone.utc).date() для прохождения линтера DTZ011
                 cur.execute(
                     "INSERT INTO urls (name, created_at) VALUES (%s, %s) RETURNING id",
-                    (normalized_url, datetime.now(timezone.utc).date())
+                    (normalized_url, datetime.now(UTC).date())
                 )
                 new_id = cur.fetchone()[0]
             conn.commit()
@@ -132,7 +131,7 @@ def create_app():
                     cur.execute("""
                         INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-                    """, (url_id, response.status_code, h1, title, description, datetime.now(timezone.utc).date()))
+                    """, (url_id, response.status_code, h1, title, description, datetime.now(UTC).date()))
 
                     conn.commit()
                     flash('Страница успешно проверена', 'success')
@@ -144,7 +143,7 @@ def create_app():
                 except RequestException:
                     flash('Произошла ошибка при проверке', 'danger')
                     return redirect(url_for('urls_show', url_id=url_id), code=303)
-                except Exception as e:  # noqa: BLE001 (игнорируем предупреждение линтера о broad exception)
+                except Exception as e:
                     print(f"Unexpected error: {e}")
                     flash('Произошла ошибка при проверке', 'danger')
                     return redirect(url_for('urls_show', url_id=url_id), code=303)
