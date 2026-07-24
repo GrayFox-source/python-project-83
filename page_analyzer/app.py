@@ -1,13 +1,15 @@
 import os
 from datetime import date
 from urllib.parse import urlparse
-import validators
-from flask import Flask, render_template, request, redirect, url_for, flash
-from dotenv import load_dotenv
-from . import db
+
 import requests
-from requests.exceptions import RequestException, Timeout, ConnectionError
+import validators
 from bs4 import BeautifulSoup
+from flask import Flask, flash, redirect, render_template, request, url_for
+from requests.exceptions import ConnectionError, RequestException, Timeout
+from dotenv import load_dotenv
+
+from . import db
 
 load_dotenv()
 
@@ -195,7 +197,8 @@ def create_app():
                 except RequestException:
                     flash('Произошла ошибка при проверке', 'danger')
                     return redirect(url_for('urls_show', url_id=url_id), code=303)
-                except Exception:
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
                     flash('Произошла ошибка при проверке', 'danger')
                     return redirect(url_for('urls_show', url_id=url_id), code=303)
         finally:
