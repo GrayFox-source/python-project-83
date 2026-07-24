@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS urls (
     created_at DATE DEFAULT CURRENT_DATE
 );
 
-CREATE TABLE IF NOT EXISTS url_cheks (
+CREATE TABLE IF NOT EXISTS url_checks (
     id SERIAL PRIMARY KEY,
     url_id INTEGER REFERENCES urls(id),
     status_code INTEGER,
@@ -13,4 +13,3 @@ CREATE TABLE IF NOT EXISTS url_cheks (
     description TEXT,
     created_at DATE DEFAULT CURRENT_DATE
 );
-
