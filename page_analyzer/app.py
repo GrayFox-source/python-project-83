@@ -26,17 +26,11 @@ def create_app():
         if request.method == 'POST':
             url = request.form.get('url', '').strip()
 
-            if not url:
-                flash('Некорректный URL!', 'danger')
-                return redirect(url_for('index'), code=303)
-
-            if len(url) > 255:
-                flash('URL не должен превышать 255 символов', 'danger')
-                return redirect(url_for('index'), code=303)
-
-            if not validators.url(url):
-                flash('Некорректный URL!', 'danger')
-                return redirect(url_for('index'), code=303)
+            # Валидация
+            if not url or len(url) > 255 or not validators.url(url):
+                flash('Некорректный URL', 'danger')
+                # 422
+                return render_template('index.html'), 422
 
             # Нормализация url адреса
             parsed = urlparse(url)
