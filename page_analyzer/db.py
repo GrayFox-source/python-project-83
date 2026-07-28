@@ -1,5 +1,6 @@
 import os
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 import psycopg
 from dotenv import load_dotenv
 
