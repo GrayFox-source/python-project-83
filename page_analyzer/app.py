@@ -1,19 +1,14 @@
 import os
-from datetime import UTC, datetime
-from urllib.parse import urlparse
-
-import requests
 import validators
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, url_for
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from . import db
+from .parser import parse_page
+from .url_normalizer import normalize_url
 
 load_dotenv()
-
-
 
 def create_app():
     template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
@@ -32,126 +27,61 @@ def create_app():
             flash('Некорректный URL', 'danger')
             return render_template('index.html'), 422
 
-        parsed = urlparse(url)
-        normalized_url = f"{parsed.scheme}://{parsed.netloc}"
+        normalized_url = normalize_url(url)
 
-        conn = db.get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM urls WHERE name = %s", (normalized_url,))
-                existing = cur.fetchone()
+        existing = db.get_url_by_name(normalized_url)
+        if existing:
+            flash('Страница уже существует', 'info')
+            return redirect(url_for('urls_show', url_id=existing[0]), code=303)
 
-                if existing:
-                    flash('Страница уже существует', 'info')
-                    return redirect(url_for('urls_show', url_id=existing[0]), code=303)
-
-                cur.execute(
-                    "INSERT INTO urls (name, created_at) VALUES (%s, %s) RETURNING id",
-                    (normalized_url, datetime.now(UTC).date())
-                )
-                new_id = cur.fetchone()[0]
-            conn.commit()
-            flash('Страница успешно добавлена', 'success')
-            return redirect(url_for('urls_show', url_id=new_id), code=303)
-        finally:
-            conn.close()
+        new_id = db.create_url(normalized_url)
+        flash('Страница успешно добавлена', 'success')
+        return redirect(url_for('urls_show', url_id=new_id), code=303)
 
     @app.route('/urls', methods=['GET'])
     def urls_list():
-        conn = db.get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT u.id, u.name, u.created_at, 
-                       MAX(uc.created_at) as last_check,
-                       (SELECT uc2.status_code
-                        FROM url_checks uc2
-                        WHERE uc2.url_id = u.id
-                        ORDER BY uc2.id DESC LIMIT 1) as last_status
-                FROM urls u
-                LEFT JOIN url_checks uc ON u.id = uc.url_id
-                GROUP BY u.id, u.name, u.created_at
-                ORDER BY u.id DESC
-            """)
-            urls = cur.fetchall()
-        conn.close()
+        urls = db.get_all_urls()
         return render_template('urls.html', urls=urls)
 
     @app.route('/urls/<int:url_id>')
     def urls_show(url_id):
-        conn = db.get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, name, created_at FROM urls WHERE id = %s",
-                (url_id,)
-            )
-            url_data = cur.fetchone()
-
-            cur.execute("""
-                SELECT id, status_code, h1, title, description, created_at
-                FROM url_checks
-                WHERE url_id = %s
-                ORDER BY id DESC
-            """, (url_id,))
-            checks = cur.fetchall()
-        conn.close()
-
+        url_data = db.get_url_by_id(url_id)
         if not url_data:
             flash('Страница не найдена', 'danger')
             return redirect(url_for('urls_list'), code=303)
 
+        checks = db.get_checks_by_url_id(url_id)
         return render_template('url_show.html', url_data=url_data, checks=checks)
 
     @app.route('/urls/<int:url_id>/checks', methods=['POST'])
     def create_check(url_id):
-        conn = db.get_db_connection()
+        url_record = db.get_url_by_id(url_id)
+        if not url_record:
+            flash('URL не найден', 'danger')
+            return redirect(url_for('urls_list'), code=303)
+
+        url_to_check = url_record[1]
+
         try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, name FROM urls WHERE id = %s", (url_id,))
-                url_record = cur.fetchone()
+            parsed_data = parse_page(url_to_check)
+            db.create_check(
+                url_id=url_id,
+                status_code=parsed_data['status_code'],
+                h1=parsed_data['h1'],
+                title=parsed_data['title'],
+                description=parsed_data['description']
+            )
+            flash('Страница успешно проверена', 'success')
+        except (Timeout, ConnectionError):
+            flash('Произошла ошибка при проверке', 'danger')
+        except RequestException:
+            flash('Произошла ошибка при проверке', 'danger')
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            flash('Произошла ошибка при проверке', 'danger')
 
-                if not url_record:
-                    flash('URL не найден', 'danger')
-                    return redirect(url_for('urls_list'), code=303)
-
-                url_to_check = url_record[1]
-
-                try:
-                    response = requests.get(url_to_check, timeout=10)
-                    response.raise_for_status()
-                    soup = BeautifulSoup(response.text, 'html.parser')
-
-                    title_tag = soup.find('title')
-                    title = title_tag.get_text().strip() if title_tag else ''
-
-                    h1_tag = soup.find('h1')
-                    h1 = h1_tag.get_text().strip() if h1_tag else ''
-
-                    meta_desc = soup.find('meta', attrs={'name': 'description'})
-                    description = meta_desc.get('content', '').strip() if meta_desc else ''
-
-                    cur.execute("""
-                        INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-                    """, (url_id, response.status_code, h1, title, description, datetime.now(UTC).date()))
-
-                    conn.commit()
-                    flash('Страница успешно проверена', 'success')
-                    return redirect(url_for('urls_show', url_id=url_id), code=303)
-
-                except (Timeout, ConnectionError):
-                    flash('Произошла ошибка при проверке', 'danger')
-                    return redirect(url_for('urls_show', url_id=url_id), code=303)
-                except RequestException:
-                    flash('Произошла ошибка при проверке', 'danger')
-                    return redirect(url_for('urls_show', url_id=url_id), code=303)
-                except Exception as e:
-                    print(f"Unexpected error: {e}")
-                    flash('Произошла ошибка при проверке', 'danger')
-                    return redirect(url_for('urls_show', url_id=url_id), code=303)
-        finally:
-            conn.close()
+        return redirect(url_for('urls_show', url_id=url_id), code=303)
 
     return app
-
 
 app = create_app()
