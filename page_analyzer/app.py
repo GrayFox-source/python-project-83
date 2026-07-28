@@ -1,4 +1,5 @@
 import os
+
 import validators
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -7,6 +8,8 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 from . import db
 from .parser import parse_page
 from .url_normalizer import normalize_url
+
+load_dotenv()
 
 load_dotenv()
 
